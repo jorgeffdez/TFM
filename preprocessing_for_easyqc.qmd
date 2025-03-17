@@ -5,8 +5,6 @@ date: "r Sys.Date()"
 output: html_document
 ---
 
-{r setup, include=FALSE} library(data.table) library(ggplot2)
-
 ```{r}
 
 library(data.table)
@@ -68,13 +66,17 @@ dataset_processing <- function(files) {
 
 # 2.Visualization
 
+We want to represent the different BETA values in a BoxPlot to detect significant differences in the median of the values. Cohorts with significant differences in the median of the values must have undergone through a different protocol or the BETA values are suggested to a different extraction process.
+
+![](PROJECTE-PT/easyQC2/EasyQC_PT.SEN-PLOT.png){width="533"}
+
+The SE-N plot obtained in the EasyQC shows the dispersion of several cohort data with respect to ideality. These cohorts are GAIT, LBC1921, LURIC and MARTHA. (two significant points above and under the regression)
+
 This section describes the process of loading filtered SNP data, generating a boxplot to visualize the distribution of the `BETA` values across different cohorts, and saving the plot.
 
 #### `load_filtered_data()`
 
 This function loads and combines filtered data files. It checks if the `BETA` column exists in each file, and if so, extracts the cohort name and appends the relevant `BETA` values along with the cohort information. The result is a single dataset containing `Cohort` and `BETA` for all files.
-
-We want to represent the different BETA values in a BoxPlot to detect significant differences in the median of the values. Cohorts with significant differences in the median of the values must have undergone through a different protocol or the BETA values are suggested to a different extraction process.
 
 ```{r}
 
@@ -145,7 +147,6 @@ p <- plot_beta_distribution(final_data)
 
 # Save and Show Plot
 ggsave("boxplot_betas_cohorts.png", plot = p, width = 10, height = 6, dpi = 150)
-print(p)
 
 ```
 
@@ -155,6 +156,7 @@ If the previous BoxPlot representing the full distribution of the BETA values in
 
 ```{r}
 
+setDT(final_data)
 # Calculate the median of BETA by cohort
 median_data <- final_data[, .(median_BETA = median(BETA, na.rm = TRUE)), by = Cohort]
 
@@ -171,4 +173,63 @@ p_median <- ggplot(median_data, aes(x = Cohort, y = median_BETA, fill = Cohort))
 ggsave("median_betas_cohorts.png", plot = p_median, width = 10, height = 6, dpi = 150)
 print(p_median)
 
+```
+
+# 5. Data normalization
+
+As we didn't spot any significant difference in the median of the BETA values, we decide to normalize the values. During the data extraction two different protocols were followed, where some BETA values got transformed and some others not. The transformation consisted on applying a multiplication of the BETA values and the standard error of the mean values. This transformation must be reverted and is the responsible for the existence of further points with respect to ideality in the SE-N plot performed in the EasyQC analysis
+
+```{r}
+
+# Define working directories
+filtered_dir <- "./PROJECTE-PT/datasets_filtered/"
+transformed_dir <- "./PROJECTE-PT/datasets_transformed/"
+summary_stats_file <- "./summary_statistics.csv"
+cohorts_of_interest <- c("GAIT", "LBC1921", "LURIC", "MARTHA")
+
+# Function to load and extract SE values
+load_se_values <- function(summary_file, cohorts) {
+  summary_data <- fread(summary_file)
+  se_values <- list()
+  
+  for (cohort in cohorts) {
+    cohort_row <- summary_data[grepl(cohort, summary_data$Cohort), ]
+    se_value <- sub(".*\\((.*)\\).*", "\\1", cohort_row$`Untrans mean (SD)`)
+    se_values[[cohort]] <- as.numeric(se_value)
+  }
+  
+  return(se_values)
+}
+
+# Load SE values
+se_values <- load_se_values(summary_stats_file, cohorts_of_interest)
+
+# Function to normalize BETA and SE values
+normalize_cohort_data <- function(cohort, filtered_dir, transformed_dir, se_values) {
+  filtered_file <- file.path(filtered_dir, paste0(cohort, "_filtered.csv.gz"))
+  transformed_file <- file.path(transformed_dir, paste0(cohort, "_transformed.csv.gz"))
+  
+  if (!file.exists(filtered_file)) {
+    warning(paste("File not found:", filtered_file))
+    return(NULL)
+  }
+  
+  cohort_data <- fread(filtered_file)
+  
+  if (!("BETA" %in% colnames(cohort_data) & "SE" %in% colnames(cohort_data))) {
+    warning(paste("Missing BETA or SE column in:", filtered_file))
+    return(NULL)
+  }
+  
+  cohort_data[, BETA := BETA / se_values[[cohort]]]
+  cohort_data[, SE := SE / se_values[[cohort]]]
+  
+  fwrite(cohort_data, transformed_file, compress = "gzip")
+  print(paste("Transformed file saved:", transformed_file))
+}
+
+# Apply normalization to each cohort
+for (cohort in cohorts_of_interest) {
+  normalize_cohort_data(cohort, filtered_dir, transformed_dir, se_values)
+}
 ```
