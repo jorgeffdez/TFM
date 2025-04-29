@@ -1,0 +1,9 @@
+*.RData
+*.Rhistory
+*.Ruserdata
+*.Rproj.user
+*.log
+*.swp
+*.tmp
+*.bak
+*.RDataTmp*

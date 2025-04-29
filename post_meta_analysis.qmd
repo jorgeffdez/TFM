@@ -1,0 +1,157 @@
+---
+title: "Post Meta Analysis"
+author: "Jorge Fernández Fernández - jorgeff369@gmail.com"
+format: html
+editor: visual
+---
+
+```{r}
+
+# Load necessary libraries
+library(qqman)
+library(data.table)
+```
+
+# 1. Manhattan Plot 
+
+```{r}
+
+# Function to read and preprocess the data
+read_and_preprocess_data <- function(file_path, is_chrX = FALSE) {
+  data <- fread(file_path, sep = "\t", header = TRUE, check.names = TRUE)
+  
+  if ("P-value" %in% colnames(data)) {
+    setnames(data, "P-value", "P.value")
+  }
+  
+  data[, c("CHR", "BP", "REF", "ALT") := tstrsplit(MarkerName, ":", fixed = TRUE)]
+  
+  if (is_chrX) {
+    data[, CHR := 23]
+  } else {
+    data[, CHR := as.numeric(sub("chr", "", CHR))]
+  }
+  
+  data[, CHR := as.numeric(CHR)]
+  data[, BP := as.numeric(BP)]
+  data[, P.value := as.numeric(P.value)]
+  
+  data <- data[!is.na(CHR) & !is.na(BP) & !is.na(P.value)]
+  data[, logP := -log10(P.value)]
+  
+  return(data)
+}
+
+# Function to generate a Manhattan plot
+generate_manhattan_plot <- function(data, output_path, plot_title = "Manhattan Plot", color = c("#CC6600", "#003399"), is_chrX = FALSE) {
+  png(output_path, width = 1800, height = 900, res = 200)
+  
+  manhattan(data, 
+            chr = "CHR", bp = "BP", p = "P.value", snp = "MarkerName",
+            genomewideline = -log10(1e-9),
+            suggestiveline = -log10(1e-5),
+            col = color,
+            cex = 0.6, cex.axis = 0.9,
+            main = plot_title,
+            ylim = c(0, max(data$logP, na.rm = TRUE) + 5),
+            xaxt = ifelse(is_chrX, "n", "s"),
+            xlab = ifelse(is_chrX, "Chromosome X Position", "Chromosome Position")
+  )
+  
+  if (is_chrX) {
+    axis(1, at = mean(range(data$BP, na.rm = TRUE)), labels = "X")
+  }
+  
+  dev.off()
+}
+```
+
+# 2. Full pipeline run
+
+```{r}
+
+# Process and plot autosomal chromosomes
+
+# Define input and output
+input_autosomal <- "METAL/generic-metal/european/MAF_01_definitivos/metalPT_maf01_definitivo1.TBL"
+output_autosomal <- "~/jorge-bioinf02/jfernandez/plots/manhattan_plot_african_001.png"
+
+# Read and preprocess autosomal data
+gwas_autosomal <- read_and_preprocess_data(input_autosomal, is_chrX = FALSE)
+
+# Generate Manhattan plot
+generate_manhattan_plot(
+  data = gwas_autosomal,
+  output_path = output_autosomal,
+  plot_title = "Manhattan Plot - GWAS Meta-Analysis - Cross Ancestry"
+)
+
+
+```
+
+```{r}
+
+
+# Process and plot chromosome X
+
+# Define input and output
+input_chrX <- "../METAL/generic-metal/japan/metalPT_japan_chrX_001.TBL"
+output_chrX <- "../plots/manhattan_chrX_japan.png"
+
+# Read and preprocess chromosome X data
+gwas_chrX <- read_and_preprocess_data(input_chrX, is_chrX = TRUE)
+
+# Generate Manhattan plot for Chromosome X
+generate_manhattan_plot(
+  data = gwas_chrX,
+  output_path = output_chrX,
+  plot_title = "Manhattan Plot - Chromosome X - Japan",
+  color = "#990099",
+  is_chrX = TRUE
+)
+```
+
+# 2. Merged Manhattan Plot
+
+```{r}
+
+# Process and plot combined autosomal chromosomes + chromosome X
+
+# Define input and output
+input_autosomal <- "../METAL/generic-metal/european/MAF_001_definitivos/metalPT_001definitivo1.TBL"
+input_chrX <- "../METAL/generic-metal/european/MAF_001_definitivos/metalPT_chrX1.TBL"
+output_combined <- "../manhattan_plot_combined.png"
+
+# Read and preprocess autosomal data
+gwas_autosomal <- read_and_preprocess_data(input_autosomal, is_chrX = FALSE)
+
+# Read and preprocess chromosome X data
+gwas_chrX <- read_and_preprocess_data(input_chrX, is_chrX = TRUE)
+
+# Combine datasets
+combined_data <- rbind(gwas_autosomal, gwas_chrX)
+
+# Generate the combined Manhattan Plot
+manhattan(
+  combined_data,
+  chr = "CHR",
+  bp = "BP",
+  p = "P.value",
+  snp = "MarkerName",
+  col = c("#CC6600", "#003399"),  # Different colors for autosomes and chromosome X
+  genomewideline = -log10(1e-9),
+  suggestiveline = -log10(1e-5),
+  cex = 0.4,
+  cex.axis = 0.8,
+  main = "Manhattan Plot - GWAS Meta-Analysis",
+  ylim = c(0, max(combined_data$logP, na.rm = TRUE) + 5),
+  chrlabs = c(1:22, "X")  # Add chromosome labels (1-22 for autosomes and "X" for chromosome X)
+)
+
+# Save the plot as PNG
+dev.copy(png, filename = output_combined, width = 1800, height = 900, res = 200)
+dev.off()
+
+```
+
+
