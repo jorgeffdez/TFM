@@ -1,0 +1,379 @@
+---
+title: "SNP Data Processing and Visualization"
+author: "Jorge Fernández Fernández - jorgeff369@gmail.com"
+date: "r Sys.Date()"
+output: html_document
+---
+
+This Quarto script applies several steps in a defined workflow performed before the execution of a Quality Control for GWAS data. Points 1 to 3 in the workflow are focused on the generic filter of the cohorts based on the Minor Allele Frequencies and the plot of the distribution of BETA's values. Points 4 to 6 in the workflow are focused work-specific steps required for the normallization of data based on BETA and its Standard Error's values but are not compulsory if data is already normalized. A final step for a build transformation is also presented.
+
+```{r}
+
+library(data.table)
+library(ggplot2)
+library(dplyr)
+```
+
+# 1. Data Filtering
+
+This section defines several functions to handle and filter SNP data files based on allele frequencies, and process them for further analysis.
+
+Before applying this filter, a standarization of the format of the data must be performed. To do so, we need to ensure the separators in all of the files are the same so they can be read under the same function.
+
+We executed the next line in the terminal:\
+\
+zcat file.csv.gz \| tr ' ' '\t' \| gzip -1 \> file_cleaned.csv.gz\
+\
+Where ' ' stands for inital spaces as separators and '\\t' as final tabulators as separators.
+
+#### `target_frequency_filter()`
+
+This function reads an SNP data file and filters the data based on the allele frequency. SNPs are kept if their frequency is between 0.10 and 0.90. It is a restrictive threshold but just that part of the script would be modified if needed.
+
+Very low MAFs are none of our interest as they represent a very little subset of individuals within the whole data of our cohort and therefore BETA values do not represent any biological significance.
+
+```{r}
+
+# Function to read and filter a file
+target_frequency_filter <- function(file) {
+  # Read file
+  data <- fread(file)
+  
+  # Determine which allele frequency column to use
+  freq_col <- if ("AF_coded" %in% colnames(data)) {
+    "AF_coded"
+  } else if ("EAF" %in% colnames(data)) {
+    "EAF"
+  } else {
+    warning(paste("AF_coded or EAF not found in:", file))
+    return(NULL)  # Return NULL if no valid column is found
+  }
+  
+  # Filter SNPs (keep only those with frequency between 0.10 and 0.90)
+  data_filtered <- data[(get(freq_col) >= 0.01) & (get(freq_col) <= 0.99)]
+  
+  return(data_filtered)
+}
+
+# Function to extract cohort name from file name
+extract_cohort_name <- function(file) {
+  gsub("_cleaned.csv.gz", "", basename(file))
+}
+
+# Function to process and save files
+dataset_processing <- function(files) {
+  for (file in files) {
+    data_filtered <- target_frequency_filter(file)
+    
+    if (!is.null(data_filtered)) {
+      cohort_name <- extract_cohort_name(file)
+      output_file <- paste0("../PROJECTE-PT/sexuals/african/male/datasets_filtered/", cohort_name, "_filtered_001.csv.gz")
+      fwrite(data_filtered, output_file, compress = "gzip")
+      print(paste("Filtered file saved:", output_file))
+    }
+  }
+}
+```
+
+# 2.Visualization of BETA distribution's
+
+We want to represent the different BETA values in a BoxPlot to detect significant differences in the median of the values. Cohorts with significant differences in the median of the values must have undergone through a different protocol or the BETA values are suggested to a different extraction process.
+
+The SE-N plot obtained in the EasyQC shows the dispersion of several cohort data with respect to ideality. These cohorts are GAIT, LBC1921, LURIC and MARTHA. (two significant points above and under the regression)
+
+GAIT final transformationThis section describes the process of loading filtered SNP data, generating a boxplot to visualize the distribution of the `BETA` values across different cohorts, and saving the plot.
+
+#### `load_filtered_data()`
+
+This function loads and combines filtered data files. It checks if the `BETA` column exists in each file, and if so, extracts the cohort name and appends the relevant `BETA` values along with the cohort information. The result is a single dataset containing `Cohort` and `BETA` for all files.
+
+```{r}
+
+# Function to load filtered data
+load_filtered_data <- function(files) {
+  data_list <- list()
+  
+  for (file in files) {
+    data <- fread(file)
+    
+    if ("BETA" %in% colnames(data)) {
+      cohort_name <- extract_cohort_name(file)
+      data[, Cohort := cohort_name]
+      data_list[[length(data_list) + 1]] <- data[, .(Cohort, BETA)]
+    } else {
+      warning(paste("BETA column missing in file:", file))
+    }
+  }
+  
+  return(rbindlist(data_list))
+}
+
+# Function to generate Boxplot
+plot_beta_distribution <- function(data) {
+  ggplot(data, aes(x = Cohort, y = BETA, fill = Cohort)) +
+    geom_boxplot(outlier.shape = NA, alpha = 0.7) +  # Clean boxplot
+    geom_jitter(width = 0.2, alpha = 0.3) +  # Add points with transparency
+    labs(title = "BETA Distribution by Cohort",
+         x = "Cohort", y = "BETA") +
+    theme_classic() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))  # Rotate labels
+}
+```
+
+# 3. Full pipeline run
+
+```{r}
+
+# List of original files
+files <- c("../PROJECTE-PT/sexuals/african/male/datasets_cleaned/BioMe_cleaned.csv.gz"
+)
+
+# Execute dataset processing (this will filter and save the data)
+dataset_processing(files)
+
+# Directory where filtered files are stored
+filtered_dir <- "../PROJECTE-PT/sexuals/male/datasets_filtered/"
+
+# List filtered files
+filtered_files <- list.files(path = filtered_dir, pattern = "*_filtered.csv.gz", full.names = TRUE)
+
+# Load filtered data
+final_data <- load_filtered_data(filtered_files)
+
+# Generate Boxplot
+p <- plot_beta_distribution(final_data)
+
+# Save and Show Plot
+ggsave("boxplot_betas_cohorts.png", plot = p, width = 10, height = 6, dpi = 150)
+
+```
+
+Due to the differences in the normalization of data, we can also spot issues both in the Quality Control and in the Density Plot performed for the study of the distribution of BETA's values. From now on, the script provided would only work if the Mean of the BETA values before the transformation and its corresponding Standard Deviation values are provided.
+
+# 4. Data normalization
+
+*As we didn't spot any significant difference in the median of the BETA values, we decide to normalize the values. During the data extraction two different protocols were followed, where some BETA values got transformed and some others not. The transformation consisted on applying a multiplication of the BETA values and the standard error of the mean values. This transformation must be reverted and is the responsible for the existence of further points with respect to ideality in the SE-N plot performed in the EasyQC analysis.*
+
+*After performing the first normalization and introducing new cohorts, we found all normalized cohorts with exception of GAIT2 found ideality. Further research must be performed on GAIT to determine this behaviour. Now, we see SHIP-TREND_Batch2, whose data was obtained after the first normalization, is separated from ideality.*
+
+```{r}
+
+# Define working directories
+filtered_dir <- "../PROJECTE-PT/sexuals/female/datasets_filtered/"
+transformed_dir <- "../PROJECTE-PT/sexuals/female/datasets_transformed/"
+summary_stats_file <- "../transf_values.csv"
+cohorts_of_interest <- c("MARTHA", "RETROVE_CASES", "RETROVE_CONTROLS")
+
+# Function to load and extract SE values
+load_se_values <- function(summary_file, cohorts) {
+  summary_data <- fread(summary_file, header=TRUE)
+  se_values <- list()
+  
+  for (cohort in cohorts) {
+    cohort_row <- summary_data[grepl(cohort, summary_data$Cohort), ]
+    se_value <- trimws(sub(".*\\((.*)\\).*", "\\1", cohort_row$`Untrans mean (SD)`))
+    se_values[[cohort]] <- as.numeric(se_value)
+  }
+  
+  return(se_values)
+}
+
+# Load SE values
+se_values <- load_se_values(summary_stats_file, cohorts_of_interest)
+
+# Function to normalize BETA and SE values
+normalize_cohort_data <- function(cohort, filtered_dir, transformed_dir, se_values) {
+  filtered_file <- file.path(filtered_dir, paste0(cohort, "_filtered_01.csv.gz"))
+  transformed_file <- file.path(transformed_dir, paste0(cohort, "_transformed_01.csv.gz"))
+  
+  if (!file.exists(filtered_file)) {
+    warning(paste("File not found:", filtered_file))
+    return(NULL)
+  }
+  
+  cohort_data <- fread(filtered_file)
+  
+  if (!("BETA" %in% colnames(cohort_data) & "SE" %in% colnames(cohort_data))) {
+    warning(paste("Missing BETA or SE column in:", filtered_file))
+    return(NULL)
+  }
+  
+  cohort_data[, BETA := BETA / se_values[[cohort]]]
+  cohort_data[, SE := SE / se_values[[cohort]]]
+  
+  fwrite(cohort_data, transformed_file, compress = "gzip")
+  print(paste("Transformed file saved:", transformed_file))
+}
+
+# Apply normalization to each cohort
+for (cohort in cohorts_of_interest) {
+  normalize_cohort_data(cohort, filtered_dir, transformed_dir, se_values)
+}
+```
+
+# 5. Wrong SNP notation
+
+*The LBC cohort had incomplete SNP notation, which led to errors when using the SNP IDs. When running EasyQC, it was not possible to compare allele frequencies with the reference panel used, as the SNP notation was incorrect and data could not be plotted.*
+
+```{bash}
+
+#!/bin/bash
+
+# Path of the input files
+file_LBC1921="./PROJECTE-PT/datasets_cleaned/Non_EVT/LBC1921_auto_cleaned.csv.gz"
+file_LBC1936="./PROJECTE-PT/datasets_cleaned/Non_EVT/LBC1936_auto_cleaned.csv.gz"
+
+# Output files
+output_LBC1921="./PROJECTE-PT/datasets_cleaned/Non_EVT/LBC1921_auto_corrected.csv.gz"
+output_LBC1936="./PROJECTE-PT/datasets_cleaned/Non_EVT/LBC1936_auto_corrected.csv.gz"
+
+# Function to correct the cptid and modify the header
+corregir_cptid() {
+    input_file="$1"
+    output_file="$2"
+    
+    echo "Correcting cptid in $input_file..."
+    
+    # Creation of the temporal file to store the corrections
+    tmp_file=$(mktemp)
+
+    # Lecture of the file, modification of the header and cptid
+    zcat "$input_file" | awk 'BEGIN {OFS="\t"} 
+        NR==1 {
+            print "SNPID", "A1", "A2", "AF_coded", "BETA", "SE", "P", "n_total", "oevar_imp"
+        } 
+        NR>1 {
+            split($1, pos, ":")
+            snpid = pos[1] ":" pos[2] ":" $3 ":" $2
+            print snpid, $2, $3, $4, $5, $6, $7, $8, $9
+        }' > "$tmp_file"
+
+    # Save and compression of the files
+    gzip -c "$tmp_file" > "$output_file"
+    rm "$tmp_file"
+    echo "Corrected filed saved as $output_file."
+}
+
+# Apply the correction at the LBC cohort
+corregir_cptid "$file_LBC1921" "$output_LBC1921"
+corregir_cptid "$file_LBC1936" "$output_LBC1936"
+
+echo "Files properly corrected and saved"
+
+```
+
+Next step would be performing a meta-analysis through METAL for all of the these cohorts' normalized data. A different METAL script would be developed for chromosome X data, as well as for each of the different ancestries under study.
+
+One of the cohorts' data failed in the annotation of the Untransformed BETA values' mean and its corresponding annotation. The following step describes this issue but performs the same operation done in the normalization registered in point 4 but for a single cohort and introducing manually the values of the mean and its standard error, which enables checking the normalization performance easily.
+
+# 6. Normalization of a single cohort.
+
+*After carefully revising the GWAS script performed to obtain GAIT's dataset, the number theoretically representing the standard deviation of the untransformed mean was identified. This was not an standard deviation and nor of the untransformed mean. The number initially applied and registered in the Excel provided by CHARGE was registering both the mean and the standard deviation of the transformed values. After looking at the residues initially generated in the transformation, a Median Absolute Deviation was performed rather than a Standard Deviation. While the first one is dependent on the mean of the values, the second one is based on the median.*
+
+*We performed this Median Absolute Deviation for the residues and identified the value by which the dataset was multiplied. In order to reverse this initially wrong made modification, we perform the division among BETA and SE values and this Median Absolute Deviation of the residues, after which we see a proper normalization of the cohort in the EasyQC.*
+
+```{r}
+
+# Function to adjust and save GAIT data
+gait_test <- function(gait_path, output_path) {
+  
+  # Load the data
+  gait <- fread(gait_path)
+  
+  # Divide the BETA and SE columns by 0.0585595
+  gait <- gait %>%
+    mutate(
+      BETA = BETA / 0.0585595,
+      SE = SE / 0.0585595
+    )
+  
+  # Save the file compressed directly using gzfile
+  con <- gzfile(output_path, "wt")  # Open connection to write a compressed file
+  write.table(
+    gait,
+    file = con,
+    sep = ",",
+    row.names = FALSE,
+    col.names = TRUE,
+    quote = FALSE
+  )
+  close(con)  # Close the connection once finished
+}
+
+# Call the function with the appropriate parameters
+gait_test("../PROJECTE-PT/autosomics/datasets_filtered/GAIT_filtered_1.csv.gz", "../PROJECTE-PT/autosomics/datasets_transformed/GAIT_prueba_1.csv.gz")
+
+```
+
+# 7. Update in the Genome Build
+
+After looking for public genomic data for the given genotype, different datastets coming from different ancestries can be found. One of the problems to face given this public research is the incompatibilities derived from the use of a different Genome of Reference. \
+\
+We can find below a script focused on the transformation of the Build of the Genome from the use of a Genome Reference 37 to a Genome Reference 38. A performance of an Easy QC is not compulsory for this public data as long as a normalization has been previously done (check article). Workflow would continue with the execution of the meta-analysis.
+
+```{bash}
+
+#!/bin/bash
+
+# Define the absolute paths to the files
+INPUT="/home/jfernandez/PROJECTE-PT/summary_statistics/build37/japanbiobank.v8.PT/hum0014.v7.PT/BBJ.PT.chrX.csv.gz"
+OUTPUT="/home/jfernandez/PROJECTE-PT/summary_statistics/build37/japan.chrX.csv.gz"
+CHAIN="/home/resources_public/liftOver/hg19ToHg38.over.chain.gz"
+LIFTOVER="/home/resources_public/liftOver/liftOver"
+
+# Temporary files
+BED_IN="/home/jfernandez/PROJECTE-PT/summary_statistics/build37/temp_input.bed"
+BED_OUT="/home/jfernandez/PROJECTE-PT/summary_statistics/build37/temp_lifted.bed"
+BED_UNLIFTED="/home/jfernandez/PROJECTE-PT/summary_statistics/build37/temp_unlifted.bed"
+DATA_TMP="/home/jfernandez/PROJECTE-PT/summary_statistics/build37/temp_original_data.tsv"
+FINAL_TMP="/home/jfernandez/PROJECTE-PT/summary_statistics/build37/temp_final_output.tsv"
+
+echo "Step 1: Generate BED file..."
+
+# Generate BED file
+zcat "$INPUT" | awk '
+  BEGIN {OFS="\t"}
+  NR == 1 {next}  # Skip header
+  {
+    if (length($4) == 1 && length($5) == 1) {  # Check if REF and ALT are 1 base long alleles
+      chrom = "chr"$2           # Chromosome
+      start = $3 - 1             # Start position (convert from 1-based to 0-based)
+      end = $3                  # End position
+      snp = $1                  # SNP ID
+      print chrom, start, end, snp
+    }
+  }
+' > "$BED_IN"
+
+echo "Step 2: Run liftOver..."
+
+# Run liftOver
+"$LIFTOVER" "$BED_IN" "$CHAIN" "$BED_OUT" "$BED_UNLIFTED"
+
+echo "Step 3: Process output..."
+
+# Save the original input (without LOG10P) as TSV without header
+zcat "$INPUT" | awk -F"\t" 'NR==1 {next} {OFS="\t"; print $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $12}' > "$DATA_TMP"
+
+# Join by SNP (column 4 in BED, column 1 in DATA_TMP) and reorder columns
+# Final output columns: CHR, POS, REF, ALT, Frq, Rsq, BETA, SE, P, SNP, N
+join -t $'\t' -1 4 -2 1 <(sort -k4,4 "$BED_OUT") <(sort -k1,1 "$DATA_TMP") | \
+  awk 'BEGIN{OFS="\t"} {gsub(/^chr/, "", $2); print $2, $3, $7, $8, $9, $10, $11, $12, $13, $1, $14}' > "$FINAL_TMP"
+
+# Add header and compress the result
+# Add correct header at the beginning of the final file
+echo -e "CHR\tPOS\tREF\tALT\tFrq\tRsq\tBETA\tSE\tP\tSNP\tN" > temp_final_with_header.tsv
+cat "$FINAL_TMP" >> temp_final_with_header.tsv
+mv temp_final_with_header.tsv "$FINAL_TMP"
+cat "$FINAL_TMP" | gzip > "$OUTPUT"
+
+# BED files are not deleted, they are kept for review
+
+# Final summary
+echo "LiftOver complete:"
+echo "  Total variants processed: $(wc -l < "$INPUT")"
+echo "  Mapped to GRCh38:          $(zcat "$OUTPUT" | wc -l)"
+echo "  Lost (unmapped):           $(wc -l < "$BED_UNLIFTED")"
+zcat "$INPUT" | awk 'NR <= 20 {OFS="\t"; print $2, $3, $1, $4, $5}' > first_20_variants.tsv
+
+```
