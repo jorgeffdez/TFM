@@ -1,0 +1,350 @@
+---
+title: "Post Meta Analysis"
+author: "Jorge Fernández Fernández - jorgeff369@gmail.com"
+format: html
+editor: visual
+---
+
+```{r}
+
+# Load necessary libraries
+library(qqman)
+library(data.table)
+library(Cairo)
+```
+
+# 1. Manhattan Plot
+
+The following script provides a simple Manhattan Plot, whether of all the autosomes or of the different positions of chromosome X by specifying the presence or absence of the sexual chromosome.
+
+```{r}
+
+# Function to read and preprocess the data
+read_and_preprocess_data <- function(file_path, is_chrX = FALSE) {
+  data <- fread(file_path, sep = "\t", header = TRUE, check.names = TRUE)
+  
+  if ("P-value" %in% colnames(data)) {
+    setnames(data, "P-value", "P.value")
+  }
+  
+  data[, c("CHR", "BP", "REF", "ALT") := tstrsplit(MarkerName, ":", fixed = TRUE)]
+  
+  if (is_chrX) {
+    data[, CHR := 23]
+  } else {
+    data[, CHR := as.numeric(sub("chr", "", CHR))]
+  }
+  
+  data[, CHR := as.numeric(CHR)]
+  data[, BP := as.numeric(BP)]
+  data[, P.value := as.numeric(P.value)]
+  
+  data <- data[!is.na(CHR) & !is.na(BP) & !is.na(P.value)]
+  data[, logP := -log10(P.value)]
+  
+  return(data)
+}
+
+# Function to generate a Manhattan plot
+generate_manhattan_plot <- function(data, output_path, plot_title = "Manhattan Plot", color = c("#CC6600", "#003399"), is_chrX = FALSE) {
+  CairoPNG(output_path, width = 1800, height = 900, res = 200)
+  
+  manhattan(data, 
+            chr = "CHR", bp = "BP", p = "P.value", snp = "MarkerName",
+            genomewideline = -log10(1e-9),
+            suggestiveline = -log10(1e-5),
+            col = color,
+            cex = 0.6, cex.axis = 0.9,
+            main = plot_title,
+            ylim = c(0, max(data$logP, na.rm = TRUE) + 5),
+            xaxt = ifelse(is_chrX, "n", "s"),
+            xlab = ifelse(is_chrX, "Chromosome X Position", "Chromosome Position")
+  )
+  
+  if (is_chrX) {
+    axis(1, at = mean(range(data$BP, na.rm = TRUE)), labels = "X")
+  }
+  
+  dev.off()
+}
+```
+
+# 2. Full pipeline run
+
+```{r}
+
+# Process and plot autosomal chromosomes
+
+# Define input and output
+input_autosomal <- "METAL/generic-metal/european/MAF_01_definitivos/metalPT_maf01_definitivo1.TBL"
+output_autosomal <- "~/jorge-bioinf02/jfernandez/plots/manhattan_plot_african_001.png"
+
+# Read and preprocess autosomal data
+gwas_autosomal <- read_and_preprocess_data(input_autosomal, is_chrX = FALSE)
+
+# Generate Manhattan plot
+generate_manhattan_plot(
+  data = gwas_autosomal,
+  output_path = output_autosomal,
+  plot_title = "Manhattan Plot - GWAS Meta-Analysis - Cross Ancestry"
+)
+
+
+```
+
+```{r}
+
+
+# Process and plot chromosome X
+
+# Define input and output
+input_chrX <- "../METAL/generic-metal/japan/metalPT_japan_chrX_001.TBL"
+output_chrX <- "../plots/manhattan_chrX_japan.png"
+
+# Read and preprocess chromosome X data
+gwas_chrX <- read_and_preprocess_data(input_chrX, is_chrX = TRUE)
+
+# Generate Manhattan plot for Chromosome X
+generate_manhattan_plot(
+  data = gwas_chrX,
+  output_path = output_chrX,
+  plot_title = "Manhattan Plot - Chromosome X - Japan",
+  color = "#990099",
+  is_chrX = TRUE
+)
+```
+
+# 3. Merged Manhattan Plot
+
+This script combines data from both autosomal and sexual chromosomes and provide a single Manhattan Plot considering X chromosome as an independent chromosome.
+
+```{r}
+
+# Process and plot combined autosomal chromosomes + chromosome X
+
+# Define input and output
+input_autosomal <- "../METAL/generic-metal/japan/metalPT_japan_001.TBL"
+input_chrX <- "../METAL/generic-metal/japan/metalPT_japan_chrX_001.TBL"
+output_combined <- "../plots/manhattan_prueba_japan.png"
+
+# Read and preprocess autosomal data
+gwas_autosomal <- read_and_preprocess_data(input_autosomal, is_chrX = FALSE)
+
+# Read and preprocess chromosome X data
+gwas_chrX <- read_and_preprocess_data(input_chrX, is_chrX = TRUE)
+
+# Combine datasets
+combined_data <- rbind(gwas_autosomal, gwas_chrX, fill=TRUE)
+
+# Generate the combined Manhattan Plot
+generate_manhattan_plot <- function(data, output_path, plot_title = "Manhattan Plot", color = c("#CC6600", "#003399")) {
+  CairoPNG(filename = output_path, width = 1800, height = 900, res = 200)
+  
+  manhattan(data, 
+            chr = "CHR", bp = "BP", p = "P.value", snp = "MarkerName",
+            genomewideline = -log10(1e-9),
+            suggestiveline = -log10(1e-5),
+            col = color,
+            cex = 0.2, cex.axis = 0.9,
+            main = plot_title,
+            ylim = c(0, max(data$logP, na.rm = TRUE) + 5),
+            chrlabs = c(1:22, "X")  
+  )
+  
+  dev.off()
+}
+
+generate_manhattan_plot(combined_data, output_combined, plot_title = "Manhattan Plot - GWAS Meta-Analysis - Japan")
+
+```
+
+# 4. Merged Manhattan Plot with Break
+
+This script provides a Manhattan Plot with a break in the Y axis. This plot is ideal for SNPs with really high significance, which tend to generate Manhattan Plots with noise for lower significance SNPs yet over the threshold established for significance.
+
+```{r}
+
+#-------------------------------
+# Read and prepare GWAS data
+#-------------------------------
+read_gwas_data <- function(path, is_chrX = FALSE) {
+  dt <- fread(path, sep = "\t", header = TRUE, check.names = TRUE)
+  if ("P-value" %in% colnames(dt)) setnames(dt, "P-value", "P.value")
+  dt[, c("CHR", "BP", "REF", "ALT") := tstrsplit(MarkerName, ":", fixed = TRUE)]
+  dt[, CHR := if (is_chrX) 23 else as.numeric(sub("chr", "", CHR))]
+  dt[, BP := as.numeric(BP)]
+  dt[, P.value := as.numeric(P.value)]
+  dt[, .(MarkerName, CHR, BP, P.value)]
+}
+
+#-------------------------------
+# Combine and process data
+#-------------------------------
+process_combined_data <- function(autosomes, chromX) {
+  combined <- rbind(autosomes, chromX)
+  combined <- combined[!is.na(CHR) & !is.na(BP) & !is.na(P.value)]
+  combined[, logP := -log10(P.value)]
+  combined <- combined[order(CHR, BP)]
+  combined[, pos := .I]
+  combined[, CHR := factor(CHR, levels = 1:23)]
+  return(combined)
+}
+
+#-------------------------------
+# Generate X-axis labels
+#-------------------------------
+generate_axis_data <- function(df) {
+  axis_data <- df[, .(center = median(pos)), by = CHR]
+  axis_data[, label := ifelse(CHR == 23, "X", as.character(CHR))]
+  return(axis_data)
+}
+
+#-------------------------------
+# Bottom plot (main plot)
+#-------------------------------
+plot_bottom <- function(data, axis_data, colors, x_limits) {
+  ggplot(data, aes(x = pos, y = logP, color = CHR)) +
+    geom_point(size = 0.4) +
+    scale_color_manual(values = colors) +
+    scale_x_continuous(breaks = axis_data$center,
+                       labels = axis_data$label,
+                       limits = x_limits) +
+    geom_hline(yintercept = -log10(1e-9), linetype = "dashed", color = "red") +
+    geom_hline(yintercept = -log10(1e-5), linetype = "dotted", color = "blue") +
+    xlab("Chromosome") +
+    ylab(expression("-log"[10]*"(p)")) +
+    theme_minimal(base_size = 12) +
+    theme(
+      legend.position = "none",
+      axis.text.x = element_text(size = 13),
+      axis.text.y = element_text(size = 13),
+      axis.title.x = element_text(size = 20),
+      axis.title.y = element_text(size = 20),
+      panel.grid = element_blank(),
+      plot.title = element_text(hjust = 0.5)
+    )
+}
+
+#-------------------------------
+# Top plot (for broken axis)
+#-------------------------------
+plot_top <- function(data, colors, x_limits) {
+  ggplot(data, aes(x = pos, y = logP, color = CHR)) +
+    geom_point(size = 0.4) +
+    scale_color_manual(values = colors) +
+    scale_x_continuous(limits = x_limits) +
+    labs(x = NULL, y = NULL) +
+    theme_minimal(base_size = 12) +
+    theme(
+      legend.position = "none",
+      axis.text.x = element_blank(),
+      axis.ticks.x = element_blank(),
+      axis.text.y = element_text(size = 13),
+      panel.grid = element_blank(),
+      plot.title = element_blank()
+    )
+}
+
+#-------------------------------
+# Assemble and save plot
+#-------------------------------
+assemble_and_save_plot <- function(p1, p2, filename) {
+  final_plot <- p2 / p1 + plot_layout(heights = c(1, 3)) +
+    plot_annotation(
+      title = "Manhattan Plot - GWAS Meta-Analysis",
+      theme = theme(
+        plot.title = element_text(hjust = 0.5, face = "bold", size = 25)
+      )
+    )
+
+  CairoPNG(filename = filename, width = 18, height = 9, units = "in", dpi = 300)
+  print(final_plot)
+  dev.off()
+}
+
+```
+
+Here we perform the full script, the variable break_point should be modified according to preferences.
+
+```{r}
+
+manhattan_cross_ancestry <- function(autosomes_path, chrX_path, output_file) {
+  autosomes <- read_gwas_data(autosomes_path)
+  chromX <- read_gwas_data(chrX_path, is_chrX = TRUE)
+
+  combined_data <- process_combined_data(autosomes, chromX)
+
+  axis_data <- generate_axis_data(combined_data)
+  chr_levels <- levels(combined_data$CHR)
+  colors <- rep(c("#CC6600", "#003399"), length.out = length(chr_levels))
+  names(colors) <- chr_levels
+
+  break_point <- 40
+  data_low <- combined_data[logP <= break_point]
+  data_high <- combined_data[logP > break_point]
+  x_limits <- range(combined_data$pos)
+
+  p1 <- plot_bottom(data_low, axis_data, colors, x_limits)
+  p2 <- plot_top(data_high, colors, x_limits)
+
+  assemble_and_save_plot(p1, p2, output_file)
+}
+```
+
+# 5. Top SNPs
+
+The script provided above extracts a list of the top 10 SNPs with highest significance. We also provide a chunk to search for those top SNPs in other datasets in order to make comparisons concerning Minor Allele Frequencies Values or Beta values.
+
+```{r}
+
+# Top SNPs from chromosome 1
+top_chr1 <- data[CHR == 1][order(P.value)][1:10]
+
+# Top SNPs from chromosome 3
+top_chr3 <- data[CHR == 3][order(P.value)][1:10]
+
+# Top SNPs from chromosome 4
+top_chr4 <- data[CHR == 4][order(P.value)][1:10]
+
+# Top SNPs from chromosome 10
+top_chr10 <- data[CHR == 10][order(P.value)][1:10]
+
+# Top SNPs from chromosome 13
+top_chr13 <- data[CHR == 13][order(P.value)][1:10]
+
+# Top SNPs from chromosome 20
+top_chr20 <- data[CHR == 20][order(P.value)][1:10]
+
+# Merging of all of the top SNPs within a single dataset
+top_snps_selected <- rbind(top_chr1, top_chr4, top_chr13, top_chr20)
+
+fwrite(top_snps_selected, file = "top_snps/top_snps_japan.txt", sep = "\t", quote = FALSE)
+```
+
+```{r}
+
+top_snps <- fread("../top_snps/topsnpdata_in_001.txt", sep="\t", header=TRUE)
+data_all <- fread("../METAL/generic-metal/japan/metalPT_japan_001.TBL", sep="\t", header=TRUE)
+
+# Extraction of Chromosome and Position
+top_snps[, c("CHR", "BP") := tstrsplit(MarkerName, ":", fixed=TRUE)[1:2]]
+data_all[, c("CHR", "BP") := tstrsplit(MarkerName, ":", fixed=TRUE)[1:2]]
+
+top_snps[, CHR := sub("^chr", "", CHR)]
+data_all[, CHR := sub("^chr", "", CHR)]
+
+top_snps[, chr_pos := paste0(CHR, ":", BP)]
+data_all[, chr_pos := paste0(CHR, ":", BP)]
+
+# We keep the order of the SNPs observed in the top SNPs txt
+top_snps[, orden := .I]
+
+# Merge by chr:pos and order
+merged <- merge(top_snps[, .(chr_pos, orden, MarkerName)], data_all, by = "chr_pos", all.x = TRUE)
+setorder(merged, orden)
+merged[, orden := NULL]
+
+# Save results
+fwrite(merged, file = "../top_snps/europesnpdata_in_japan_by_pos.txt", sep = "\t", quote = FALSE)
+
+```

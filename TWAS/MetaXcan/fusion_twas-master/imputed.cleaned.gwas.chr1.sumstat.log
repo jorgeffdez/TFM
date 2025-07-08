@@ -1,0 +1,13 @@
+====================================
+               FIZI v0.7.2             
+====================================
+fizi impute
+	cleaned.gwas.sumstats.gz
+	/home/resources_public/refpanels/TWAS_ref/LDREF_1000G/1000G.EUR.1
+	--chr 1
+	--out imputed.cleaned.gwas.chr1.sumstat
+
+Starting log...
+[2025-06-05 11:37:10 - INFO] Preparing GWAS summary file
+[2025-06-05 11:37:10 - ERROR] [Errno 2] No such file or directory: 'cleaned.gwas.sumstats.gz'
+[2025-06-05 11:37:10 - INFO] Finished summary statistic imputation

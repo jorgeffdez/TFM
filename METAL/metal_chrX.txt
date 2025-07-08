@@ -1,0 +1,57 @@
+## cd METAL/generic-metal
+./metal
+
+SEPARATOR TAB
+MARKER cptid
+ALLELE 	EFFECT_ALLELE OTHER_ALLELE
+EFFECT BETA	
+FREQLABEL EAF
+PVALUE PVAL
+CUSTOMVARIABLE N
+LABEL N AS N
+STDERR SE
+SCHEME STDERR
+AVERAGEFREQ ON
+MINMAXFREQ ON
+VERBOSE OFF
+#ADDFILTER EAF > 0.01
+#ADDFILTER EAF < 0.99
+GENOMICCONTROL ON
+
+PROCESS /home/jfernandez/PROJECTE-PT/sexuals/european/female/easyQC_001/CLEANED.BioMe_filtered_001.csv.gz
+PROCESS /home/jfernandez/PROJECTE-PT/sexuals/european/female/easyQC_001/CLEANED.RETROVE_CASES_transformed_001.csv.gz
+PROCESS /home/jfernandez/PROJECTE-PT/sexuals/european/female/easyQC_001/CLEANED.RETROVE_CONTROLS_transformed_001.csv.gz
+PROCESS /home/jfernandez/PROJECTE-PT/sexuals/european/female/easyQC_001/CLEANED.SHIP_START_filtered_001.csv.gz
+PROCESS /home/jfernandez/PROJECTE-PT/sexuals/european/female/easyQC_001/CLEANED.SHIP-TREND_Batch1_filtered_001.csv.gz
+PROCESS /home/jfernandez/PROJECTE-PT/sexuals/european/female/easyQC_001/CLEANED.SHIP-TREND_Batch2_filtered_001.csv.gz
+PROCESS /home/jfernandez/PROJECTE-PT/sexuals/european/female/easyQC_001/CLEANED.MARTHA_transformed_001.csv.gz
+PROCESS /home/jfernandez/PROJECTE-PT/sexuals/european/male/easyQCmaf001/CLEANED.MARTHA_transformed_001.csv.gz
+PROCESS /home/jfernandez/PROJECTE-PT/sexuals/european/male/easyQCmaf001/CLEANED.SHIP-TREND_Batch2_filtered_001.csv.gz
+PROCESS /home/jfernandez/PROJECTE-PT/sexuals/european/male/easyQCmaf001/CLEANED.SHIP-TREND_Batch1_filtered_001.csv.gz
+PROCESS /home/jfernandez/PROJECTE-PT/sexuals/european/male/easyQCmaf001/CLEANED.SHIP_START_filtered_001.csv.gz
+PROCESS /home/jfernandez/PROJECTE-PT/sexuals/european/male/easyQCmaf001/CLEANED.RETROVE_CONTROLS_transformed_001.csv.gz
+PROCESS /home/jfernandez/PROJECTE-PT/sexuals/european/male/easyQCmaf001/CLEANED.RETROVE_CASES_transformed_001.csv.gz
+PROCESS /home/jfernandez/PROJECTE-PT/sexuals/european/male/easyQCmaf001/CLEANED.GAIT_transformed_001.csv.gz
+PROCESS /home/jfernandez/PROJECTE-PT/sexuals/european/male/easyQCmaf001/CLEANED.BioMe_filtered_001.csv.gz
+
+SEPARATOR TAB
+MARKER cptid
+ALLELE 	 OTHER_ALLELE EFFECT_ALLELE
+EFFECT BETA	
+FREQLABEL EAF
+PVALUE PVAL
+CUSTOMVARIABLE N
+LABEL N AS N
+STDERR SE
+SCHEME STDERR
+AVERAGEFREQ ON
+MINMAXFREQ ON
+VERBOSE OFF
+#ADDFILTER EAF > 0.01
+#ADDFILTER EAF < 0.99
+
+ANALYZE
+
+OUTFILE metalPT_europe_chrX_001 .TBL
+
+QUIT

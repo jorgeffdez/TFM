@@ -1,0 +1,35 @@
+MARKER cptid
+ALLELE EFFECT_ALLELE OTHER_ALLELE
+EFFECT BETA
+FREQLABEL EAF
+PVALUE PVAL
+CUSTOMVARIABLE N
+LABEL N AS N
+STDERR SE
+SCHEME STDERR
+AVERAGEFREQ ON
+MINMAXFREQ ON
+VERBOSE OFF
+SEPARATOR TAB
+#ADDFILTER EAF > 0.01
+#ADDFILTER EAF < 0.99
+GENOMICCONTROL ON
+
+PROCESS /home/jfernandez/PROJECTE-PT/autosomics/european/easyQC01_definitivo/CLEANED.BioMe_EUR_filtered.csv.gz
+PROCESS /home/jfernandez/PROJECTE-PT/autosomics/european/easyQC01_definitivo/CLEANED.CHRIS_filtered.csv.gz
+PROCESS /home/jfernandez/PROJECTE-PT/autosomics/european/easyQC01_definitivo/CLEANED.GAIT_prueba.csv.gz
+PROCESS /home/jfernandez/PROJECTE-PT/autosomics/european/easyQC01_definitivo/CLEANED.LBC1921_transformed.csv.gz
+PROCESS /home/jfernandez/PROJECTE-PT/autosomics/european/easyQC01_definitivo/CLEANED.LBC1936_filtered.csv.gz
+PROCESS /home/jfernandez/PROJECTE-PT/autosomics/european/easyQC01_definitivo/CLEANED.LURIC_transformed.csv.gz
+PROCESS /home/jfernandez/PROJECTE-PT/autosomics/european/easyQC01_definitivo/CLEANED.MARTHA_transformed.csv.gz
+PROCESS /home/jfernandez/PROJECTE-PT/autosomics/european/easyQC01_definitivo/CLEANED.RETROVE_CASES_transformed.csv.gz
+PROCESS /home/jfernandez/PROJECTE-PT/autosomics/european/easyQC01_definitivo/CLEANED.RETROVE_CONTROLS_transformed.csv.gz
+PROCESS /home/jfernandez/PROJECTE-PT/autosomics/european/easyQC01_definitivo/CLEANED.SHIP_START_filtered.csv.gz
+PROCESS /home/jfernandez/PROJECTE-PT/autosomics/european/easyQC01_definitivo/CLEANED.SHIP-TREND_Batch1_filtered.csv.gz
+PROCESS /home/jfernandez/PROJECTE-PT/autosomics/european/easyQC01_definitivo/CLEANED.SHIP-TREND_Batch2_filtered.csv.gz
+
+OUTFILE metal_european_01 .TBL
+
+ANALYZE HETEROGENEITY
+QUIT
+

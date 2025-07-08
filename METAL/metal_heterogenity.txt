@@ -1,0 +1,19 @@
+MARKER MarkerName
+ALLELE Allele1 Allele2
+EFFECT Effect
+STDERR StdErr
+FREQLABEL Freq1
+PVALUE P-value
+WEIGHT N
+SCHEME STDERR
+AVERAGEFREQ ON
+MINMAXFREQ ON
+VERBOSE OFF
+
+PROCESS /home/jfernandez/METAL/generic-metal/MAF_001_definitivos/metalPT_maf001_definitivo1.TBL
+PROCESS /home/jfernandez/METAL/generic-metal/african_american/metalPT_001.TBL
+
+OUTFILE metal_heterogeneity_001 .TBL
+ANALYZE HETEROGENEITY
+
+QUIT

@@ -1,0 +1,22 @@
+SEPARATOR TAB
+MARKER MarkerName
+ALLELE Allele1 Allele2
+EFFECT Effect
+STDERR StdErr
+PVALUE P-value
+WEIGHT N
+FREQLABEL Freq1
+SCHEME N
+AVERAGEFREQ ON
+MINMAXFREQ ON
+
+
+PROCESS /home/jfernandez/METAL/generic-metal/european/MAF_001_definitivos/metalPT_chrX1.TBL
+PROCESS /home/jfernandez/METAL/generic-metal/japan/metalPT_japan_chrX_001.TBL
+PROCESS /home/jfernandez/METAL/generic-metal/african/metal_chrX_001.TBL
+
+OUTFILE metal_cross_ancestry_chrX .TBL
+
+ANALYZE HETEROGENEITY
+QUIT
+

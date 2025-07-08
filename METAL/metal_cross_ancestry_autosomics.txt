@@ -1,0 +1,22 @@
+SEPARATOR TAB
+MARKER MarkerName
+ALLELE Allele1 Allele2
+EFFECT Effect
+STDERR StdErr
+PVALUE P-value
+WEIGHT N
+FREQLABEL Freq1
+SCHEME N
+AVERAGEFREQ ON
+MINMAXFREQ ON
+
+PROCESS /home/jfernandez/METAL/generic-metal/european/MAF_001_definitivos/metalPT_001definitivo1.TBL
+PROCESS /home/jfernandez/METAL/generic-metal/african_american/metalPT_001.TBL
+PROCESS /home/jfernandez/METAL/generic-metal/japan/metalPT_japan_001.TBL
+PROCESS /home/jfernandez/METAL/generic-metal/qatar/metalPT_qatar001.TBL
+
+OUTFILE metal_cross_ancestry .TBL
+
+ANALYZE HETEROGENEITY
+QUIT
+
